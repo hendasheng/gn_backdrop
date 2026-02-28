@@ -2,7 +2,7 @@ bl_info = {
     "name": "Geometry Nodes Backdrop",
     "author": "Your Name",
     "version": (1, 0, 0),
-    "blender": (4, 5, 0),
+    "blender": (5, 0, 0),
     "location": "Node Editor > Geometry Nodes",
     "description": "Display 3D viewport in geometry nodes editor background",
     "category": "Node",
