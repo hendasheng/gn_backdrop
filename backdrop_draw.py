@@ -136,15 +136,15 @@ def draw_backdrop():
     # 创建着色器 - 使用 IMAGE 着色器
     shader = gpu.shader.from_builtin('IMAGE')
 
-    # 全屏四边形，直接填满整个背景
+    # 全屏四边形
     vertices = (
         (0, 0), (width, 0),
         (width, height), (0, height))
 
-    # 翻转 Y 轴的纹理坐标（OpenGL 和 Blender 的坐标系可能不同）
+    # 正常的纹理坐标
     texcoords = (
-        (0, 1), (1, 1),
-        (1, 0), (0, 0))
+        (0, 0), (1, 0),
+        (1, 1), (0, 1))
 
     batch = batch_for_shader(
         shader, 'TRI_FAN',
@@ -153,11 +153,31 @@ def draw_backdrop():
 
     # 绘制
     try:
+        # 保存并重置变换矩阵，使用屏幕空间坐标
+        gpu.matrix.push()
+        gpu.matrix.push_projection()
+
+        # 加载单位矩阵
+        gpu.matrix.load_identity()
+
+        # 设置正交投影矩阵，映射到屏幕像素坐标
+        projection_matrix = Matrix([
+            [2.0 / width, 0, 0, -1],
+            [0, 2.0 / height, 0, -1],
+            [0, 0, -1, 0],
+            [0, 0, 0, 1]
+        ])
+        gpu.matrix.load_projection_matrix(projection_matrix)
+
         gpu.state.blend_set('ALPHA')
         shader.bind()
         shader.uniform_sampler("image", _captured_texture)
         batch.draw(shader)
         gpu.state.blend_set('NONE')
+
+        # 恢复变换矩阵
+        gpu.matrix.pop_projection()
+        gpu.matrix.pop()
     except Exception as e:
         print(f"✗ 绘制错误: {e}")
 
