@@ -30,89 +30,42 @@ def draw_3d_scene_as_backdrop():
     if not region:
         return
 
-    # 查找 3D 视图的视图设置
-    view3d_space = None
-    view3d_region = None
-
-    for area in context.screen.areas:
-        if area.type == 'VIEW_3D':
-            for sp in area.spaces:
-                if sp.type == 'VIEW_3D':
-                    view3d_space = sp
-                    break
-            for reg in area.regions:
-                if reg.type == 'WINDOW':
-                    view3d_region = reg
-                    break
-            break
-
-    if not view3d_space or not view3d_region:
-        return
-
     try:
-        # 保存当前的 GPU 状态
+        # 简单绘制一个测试矩形，验证基本绘制是否工作
+        shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+
+        width = region.width
+        height = region.height
+
+        # 绘制半透明蓝色背景
+        vertices = [(0, 0), (width, 0), (width, height), (0, height)]
+
+        batch = batch_for_shader(
+            shader, 'TRI_FAN',
+            {"pos": vertices},
+        )
+
+        # 保存并重置变换矩阵
         gpu.matrix.push()
         gpu.matrix.push_projection()
 
-        # 使用 3D 视图的视图矩阵和投影矩阵
-        view_matrix = view3d_region.view_matrix.copy()
-        projection_matrix = view3d_region.view_perspective_matrix.copy()
+        gpu.matrix.load_identity()
 
-        gpu.matrix.load_matrix(view_matrix)
+        # 设置正交投影
+        projection_matrix = Matrix([
+            [2.0 / width, 0, 0, -1],
+            [0, 2.0 / height, 0, -1],
+            [0, 0, -1, 0],
+            [0, 0, 0, 1]
+        ])
         gpu.matrix.load_projection_matrix(projection_matrix)
 
-        # 设置视口
-        gpu.state.viewport_set(0, 0, region.width, region.height)
+        gpu.state.blend_set('ALPHA')
+        shader.bind()
+        shader.uniform_float("color", (0.2, 0.3, 0.5, 0.3))
+        batch.draw(shader)
+        gpu.state.blend_set('NONE')
 
-        # 启用深度测试
-        gpu.state.depth_test_set('LESS_EQUAL')
-        gpu.state.depth_mask_set(True)
-
-        # 绘制场景中的所有对象
-        depsgraph = context.evaluated_depsgraph_get()
-
-        for obj_eval in depsgraph.objects:
-            if obj_eval.type == 'MESH':
-                # 获取对象的世界矩阵
-                matrix_world = obj_eval.matrix_world.copy()
-
-                # 获取网格数据
-                mesh = obj_eval.data
-
-                if len(mesh.vertices) > 0 and len(mesh.polygons) > 0:
-                    # 创建顶点和索引数据
-                    vertices = [matrix_world @ v.co for v in mesh.vertices]
-
-                    # 创建三角形索引
-                    indices = []
-                    for poly in mesh.polygons:
-                        if len(poly.vertices) >= 3:
-                            # 简单的三角形扇形分割
-                            for i in range(1, len(poly.vertices) - 1):
-                                indices.append((poly.vertices[0], poly.vertices[i], poly.vertices[i + 1]))
-
-                    if indices:
-                        # 创建着色器
-                        shader = gpu.shader.from_builtin('UNIFORM_COLOR')
-                        batch = batch_for_shader(
-                            shader, 'TRIS',
-                            {"pos": vertices},
-                            indices=indices,
-                        )
-
-                        # 使用对象的颜色或默认颜色
-                        if obj_eval.color:
-                            color = (*obj_eval.color[:3], 1.0)
-                        else:
-                            color = (0.8, 0.8, 0.8, 1.0)
-
-                        shader.bind()
-                        shader.uniform_float("color", color)
-                        batch.draw(shader)
-
-        # 恢复 GPU 状态
-        gpu.state.depth_test_set('NONE')
-        gpu.state.depth_mask_set(False)
         gpu.matrix.pop_projection()
         gpu.matrix.pop()
 
