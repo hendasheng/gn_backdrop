@@ -52,11 +52,11 @@ def capture_view3d_framebuffer():
                     _capture_height = height
                     print(f"✓ 创建纹理: {width}x{height}")
 
-                # 更新纹理数据 - 使用 buffer 对象直接更新
-                # 将 buffer 转换为正确的格式
-                import array
-                pixel_data = buffer.to_list()
-                _captured_texture.clear(format='UBYTE', value=pixel_data)
+                # 更新纹理数据
+                # GPUTexture.clear() 不适合更新像素数据
+                # 我们需要使用不同的方法
+                # 暂时跳过更新，先测试绘制是否工作
+                print(f"✓ 捕获 framebuffer: {width}x{height}")
 
             except Exception as e:
                 print(f"✗ 捕获错误: {e}")
@@ -108,41 +108,28 @@ def draw_backdrop():
     width = region.width
     height = region.height
 
-    # 创建着色器
-    shader = gpu.shader.from_builtin('IMAGE')
+    # 创建着色器 - 使用 UNIFORM_COLOR 先测试基本绘制
+    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
 
     # 全屏四边形
     vertices = (
         (0, 0), (width, 0),
         (width, height), (0, height))
 
-    texcoords = (
-        (0, 0), (1, 0),
-        (1, 1), (0, 1))
-
-    indices = ((0, 1, 2), (0, 2, 3))
-
     batch = batch_for_shader(
-        shader, 'TRIS',
-        {"pos": vertices, "texCoord": texcoords},
-        indices=indices,
+        shader, 'TRI_FAN',
+        {"pos": vertices},
     )
 
     # 绘制
     try:
         gpu.state.blend_set('ALPHA')
         shader.bind()
-        shader.uniform_sampler("image", _captured_texture)
-
-        # IMAGE 着色器需要 viewProjectionMatrix，不是 modelViewProjectionMatrix
-        # 使用单位矩阵，因为顶点坐标已经是屏幕空间坐标
-        view_matrix = Matrix.Identity(4)
-        projection_matrix = Matrix.OrthoProjection('XY', 4)
-        shader.uniform_float("viewProjectionMatrix", projection_matrix @ view_matrix)
-
+        # 绘制半透明蓝色矩形作为测试
+        shader.uniform_float("color", (0.2, 0.5, 1.0, 0.3))
         batch.draw(shader)
         gpu.state.blend_set('NONE')
-        print("✓ 绘制背景")
+        print("✓ 绘制测试背景（蓝色）")
     except Exception as e:
         print(f"✗ 绘制错误: {e}")
         import traceback
