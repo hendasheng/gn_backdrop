@@ -59,9 +59,19 @@ def capture_view3d_framebuffer():
                 fb = gpu.state.active_framebuffer_get()
                 print(f"→ Framebuffer: {fb}")
 
+                # 计算期望的 buffer 大小
+                expected_size = width * height * 4  # RGBA，每个通道一个 float
+                print(f"→ 期望 buffer 大小: {expected_size * 4} bytes ({width}x{height}x4 channels x 4 bytes)")
+
                 # 读取颜色数据到 buffer - 使用 FLOAT 格式
                 buffer = fb.read_color(0, 0, width, height, 4, 0, 'FLOAT')
-                print(f"→ Buffer 大小: {len(buffer)} bytes")
+                actual_size = len(buffer)
+                print(f"→ 实际 buffer 大小: {actual_size} bytes")
+
+                if actual_size != expected_size:
+                    print(f"✗ 错误：buffer 大小不匹配！期望 {expected_size}，实际 {actual_size}")
+                    print(f"  这可能是 framebuffer 读取失败的原因")
+                    return
 
                 # 检查中心像素的值
                 center_idx = (height // 2 * width + width // 2) * 4
