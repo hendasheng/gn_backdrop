@@ -145,7 +145,13 @@ class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
 def register():
     global _draw_handler_node, _draw_handler_view3d
 
-    bpy.utils.register_class(GEONODE_OT_toggle_backdrop)
+    # 安全注册类（避免重复注册错误）
+    try:
+        bpy.utils.register_class(GEONODE_OT_toggle_backdrop)
+    except ValueError:
+        # 类已经注册，先注销再重新注册
+        bpy.utils.unregister_class(GEONODE_OT_toggle_backdrop)
+        bpy.utils.register_class(GEONODE_OT_toggle_backdrop)
 
     # 在 3D 视图中注册捕获回调（POST_PIXEL 确保在绘制完成后执行）
     _draw_handler_view3d = bpy.types.SpaceView3D.draw_handler_add(
@@ -173,4 +179,8 @@ def unregister():
         del _captured_texture
         _captured_texture = None
 
-    bpy.utils.unregister_class(GEONODE_OT_toggle_backdrop)
+    try:
+        bpy.utils.unregister_class(GEONODE_OT_toggle_backdrop)
+    except RuntimeError:
+        # 类未注册，忽略错误
+        pass
