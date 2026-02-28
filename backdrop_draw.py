@@ -2,7 +2,6 @@ import bpy
 import gpu
 from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix
-import numpy as np
 
 
 # 全局变量
@@ -37,19 +36,30 @@ def capture_view3d_framebuffer():
                 # 读取当前 framebuffer
                 fb = gpu.state.active_framebuffer_get()
 
-                # 创建纹理来存储捕获的内容
+                # 读取颜色数据
+                buffer = fb.read_color(0, 0, width, height, 4, 0, 'UBYTE')
+
+                # 创建或更新纹理
                 if (_captured_texture is None or
                     _capture_width != width or
                     _capture_height != height):
+
+                    if _captured_texture:
+                        del _captured_texture
 
                     _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA8')
                     _capture_width = width
                     _capture_height = height
 
-                # 读取 framebuffer 到纹理
-                # 注意：这需要使用 GPU 的 blit 功能
-                buffer = fb.read_color(0, 0, width, height, 4, 0, 'UBYTE')
-                _captured_texture.clear(format='UBYTE', value=buffer.to_list())
+                # 更新纹理数据
+                # 使用 bgl 来更新纹理
+                import bgl
+                bgl.glBindTexture(bgl.GL_TEXTURE_2D, _captured_texture.bind_code)
+                bgl.glTexSubImage2D(
+                    bgl.GL_TEXTURE_2D, 0, 0, 0, width, height,
+                    bgl.GL_RGBA, bgl.GL_UNSIGNED_BYTE, buffer
+                )
+                bgl.glBindTexture(bgl.GL_TEXTURE_2D, 0)
 
             except Exception as e:
                 print(f"Capture error: {e}")
@@ -85,13 +95,13 @@ def draw_backdrop():
     # 全屏四边形
     vertices = (
         (0, 0), (width, 0),
-        (0, height), (width, height))
+        (width, height), (0, height))
 
     texcoords = (
         (0, 0), (1, 0),
-        (0, 1), (1, 1))
+        (1, 1), (0, 1))
 
-    indices = ((0, 1, 2), (2, 1, 3))
+    indices = ((0, 1, 2), (0, 2, 3))
 
     batch = batch_for_shader(
         shader, 'TRIS',
@@ -147,7 +157,7 @@ def draw_header_button(self, context):
     layout = self.layout
 
     # 检查是否在节点编辑器中
-    if context.area.type != 'NODE_EDITOR':
+    if not hasattr(context, 'area') or context.area.type != 'NODE_EDITOR':
         return
 
     space = context.space_data
