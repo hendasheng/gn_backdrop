@@ -50,6 +50,7 @@ def capture_view3d_framebuffer():
                     _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA8')
                     _capture_width = width
                     _capture_height = height
+                    print(f"✓ 创建纹理: {width}x{height}")
 
                 # 更新纹理数据
                 # 使用 bgl 来更新纹理
@@ -62,14 +63,36 @@ def capture_view3d_framebuffer():
                 bgl.glBindTexture(bgl.GL_TEXTURE_2D, 0)
 
             except Exception as e:
-                print(f"Capture error: {e}")
+                print(f"✗ 捕获错误: {e}")
+                import traceback
+                traceback.print_exc()
 
 
 def draw_backdrop():
     """在几何节点编辑器背景绘制捕获的内容"""
     global _enabled, _captured_texture
 
-    if not _enabled or _captured_texture is None:
+    if not _enabled:
+        return
+
+    if _captured_texture is None:
+        # 绘制一个测试矩形来验证绘制是否工作
+        context = bpy.context
+        if hasattr(context, 'space_data') and context.space_data.type == 'NODE_EDITOR':
+            space = context.space_data
+            if hasattr(space, 'tree_type') and space.tree_type == 'GeometryNodeTree':
+                region = context.region
+                if region:
+                    # 绘制红色测试矩形
+                    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+                    batch = batch_for_shader(
+                        shader, 'TRI_FAN',
+                        {"pos": [(100, 100), (300, 100), (300, 300), (100, 300)]},
+                    )
+                    shader.bind()
+                    shader.uniform_float("color", (1, 0, 0, 0.5))
+                    batch.draw(shader)
+                    print("⚠ 纹理未捕获，显示测试矩形")
         return
 
     context = bpy.context
@@ -125,8 +148,11 @@ def draw_backdrop():
         shader.uniform_float("modelViewProjectionMatrix", projection_matrix)
         batch.draw(shader)
         gpu.state.blend_set('NONE')
+        print("✓ 绘制背景")
     except Exception as e:
-        print(f"Draw error: {e}")
+        print(f"✗ 绘制错误: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
@@ -141,8 +167,15 @@ class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
 
         if _enabled:
             self.report({'INFO'}, "Geometry Nodes Backdrop enabled")
+            print("\n=== Backdrop 已启用 ===")
+            print("请确保:")
+            print("1. 3D 视图和几何节点编辑器同时可见")
+            print("2. 在 3D 视图中移动或旋转视图")
+            print("3. 查看控制台输出的调试信息")
+            print("=====================\n")
         else:
             self.report({'INFO'}, "Geometry Nodes Backdrop disabled")
+            print("\n=== Backdrop 已禁用 ===\n")
 
         # 强制重绘
         for window in context.window_manager.windows:
