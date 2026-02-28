@@ -10,16 +10,9 @@
 
 ## 安装
 
-1. 下载插件的 .zip 文件（或将项目文件夹打包成 .zip）
-2. 在 Blender 中打开 `编辑 > 偏好设置 > 插件`
-3. 点击右上角的 `安装...` 按钮
-4. 选择下载的 .zip 文件
-5. 搜索 "Geometry Nodes Backdrop"
-6. 勾选启用插件
+### 方法一：使用打包脚本（推荐）
 
-### 从源码打包
-
-如果你从源码安装，可以使用提供的打包脚本：
+1. 在项目目录下运行打包脚本：
 
 **macOS/Linux:**
 ```bash
@@ -33,10 +26,37 @@ cd gn_backdrop
 .\package.ps1
 ```
 
-或者手动打包：
+2. 在 Blender 中：
+   - 编辑 > 偏好设置 > 插件
+   - 点击右上角的 `安装...` 按钮
+   - 选择生成的 `gn_backdrop.zip` 文件（在项目父目录）
+   - 搜索 "Geometry Nodes Backdrop"
+   - 勾选启用插件
+
+### 方法二：手动打包
+
+**重要：必须打包整个文件夹，而不是文件夹内的文件！**
+
+在项目的**父目录**执行：
 ```bash
-# 在项目父目录执行
-zip -r gn_backdrop.zip gn_backdrop -x "*.git*" -x "*__pycache__*" -x "*.DS_Store"
+zip -r gn_backdrop.zip gn_backdrop -x "*.git*" -x "*__pycache__*" -x "*.DS_Store" -x "*.claude*"
+```
+
+确保 zip 文件内部结构为：
+```
+gn_backdrop.zip
+  └── gn_backdrop/
+      ├── __init__.py
+      ├── backdrop_draw.py
+      └── ...
+```
+
+而**不是**：
+```
+gn_backdrop.zip
+  ├── __init__.py  ← 错误！不应该在顶层
+  ├── backdrop_draw.py
+  └── ...
 ```
 
 ## 使用方法

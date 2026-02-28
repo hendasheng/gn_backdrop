@@ -2,18 +2,52 @@
 
 ## 快速开始
 
-### 1. 打包插件（如果从源码安装）
+### 1. 打包插件
 
-在项目的父目录执行：
+**重要提示：**
+- 必须在 `gn_backdrop` 文件夹内运行打包脚本
+- 生成的 zip 文件会在父目录
+- zip 内部必须包含 `gn_backdrop` 文件夹，而不是直接包含文件
+
+**使用打包脚本（推荐）：**
 
 **macOS/Linux:**
 ```bash
-zip -r gn_backdrop.zip gn_backdrop -x "*.git*" -x "*__pycache__*" -x "*.DS_Store"
+cd gn_backdrop
+./package.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-Compress-Archive -Path gn_backdrop -DestinationPath gn_backdrop.zip
+cd gn_backdrop
+.\package.ps1
+```
+
+**手动打包：**
+
+在项目的**父目录**执行：
+```bash
+zip -r gn_backdrop.zip gn_backdrop -x "*.git*" -x "*__pycache__*" -x "*.DS_Store" -x "*.claude*"
+```
+
+**验证 zip 结构：**
+```bash
+unzip -l gn_backdrop.zip
+```
+
+应该看到：
+```
+gn_backdrop/
+gn_backdrop/__init__.py
+gn_backdrop/backdrop_draw.py
+...
+```
+
+而**不是**：
+```
+__init__.py  ← 错误！
+backdrop_draw.py
+...
 ```
 
 ### 2. 安装插件

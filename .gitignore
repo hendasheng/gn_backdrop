@@ -25,5 +25,8 @@ Desktop.ini
 *.swo
 *~
 
+# Claude
+.claude/
+
 # Package
 *.zip

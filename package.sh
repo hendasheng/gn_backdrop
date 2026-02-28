@@ -24,11 +24,17 @@ zip -r "$OUTPUT_FILE" "$ADDON_NAME" \
     -x "*__pycache__*" \
     -x "*.pyc" \
     -x "*.DS_Store" \
+    -x "*.claude*" \
     -x "*package.sh" \
     -x "*package.ps1"
 
 if [ $? -eq 0 ]; then
+    echo ""
     echo "✓ 打包成功: $OUTPUT_FILE"
+    echo ""
+    echo "Zip 文件结构："
+    unzip -l "$OUTPUT_FILE" | grep -E "(__init__|backdrop_draw|LICENSE|README)"
+    echo ""
     echo "现在可以在 Blender 中安装此文件"
 else
     echo "✗ 打包失败"
