@@ -39,10 +39,9 @@ def capture_view3d_framebuffer():
 
                 # 读取当前 framebuffer
                 fb = gpu.state.active_framebuffer_get()
-                print(f"  Framebuffer: {fb}")
 
-                # 读取颜色数据到 buffer
-                buffer = fb.read_color(0, 0, width, height, 4, 0, 'UBYTE')
+                # 读取颜色数据到 buffer - 使用 FLOAT 格式
+                buffer = fb.read_color(0, 0, width, height, 4, 0, 'FLOAT')
                 print(f"  Buffer 大小: {len(buffer)} bytes")
 
                 # 创建或更新纹理
@@ -54,7 +53,7 @@ def capture_view3d_framebuffer():
                         del _captured_texture
 
                     # 创建新纹理，使用 data 参数直接初始化
-                    _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA8', data=buffer)
+                    _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA32F', data=buffer)
                     _capture_width = width
                     _capture_height = height
                     _pixel_buffer = buffer
@@ -62,7 +61,7 @@ def capture_view3d_framebuffer():
                 else:
                     # 更新现有纹理 - 重新创建纹理（因为没有直接的更新方法）
                     del _captured_texture
-                    _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA8', data=buffer)
+                    _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA32F', data=buffer)
                     _pixel_buffer = buffer
                     print(f"✓ 更新纹理")
 
