@@ -62,12 +62,12 @@ gn_backdrop.zip
 ## 使用方法
 
 1. 打开几何节点编辑器
-2. 在 Blender 中运行命令：`bpy.ops.node.toggle_geonode_backdrop()`
-3. 或者在 Python 控制台中输入：
-   ```python
-   import bpy
-   bpy.ops.node.toggle_geonode_backdrop()
-   ```
+2. 在节点编辑器的头部（顶部工具栏）找到 **Backdrop** 按钮
+3. 点击按钮即可开启/关闭背景显示
+
+按钮状态：
+- 按下状态（高亮）：Backdrop 已启用
+- 未按下状态：Backdrop 已禁用
 
 ## 当前限制
 

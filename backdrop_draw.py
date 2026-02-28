@@ -122,7 +122,7 @@ def draw_backdrop():
 class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
     """Toggle geometry nodes backdrop display"""
     bl_idname = "node.toggle_geonode_backdrop"
-    bl_label = "Toggle Backdrop"
+    bl_label = "Backdrop"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -142,6 +142,23 @@ class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def draw_header_button(self, context):
+    """在节点编辑器头部绘制 Backdrop 按钮"""
+    # 只在几何节点编辑器中显示
+    if context.space_data.tree_type == 'GeometryNodeTree':
+        layout = self.layout
+        layout.separator_spacer()
+
+        # 使用图标按钮，根据状态改变图标
+        icon = 'HIDE_OFF' if _enabled else 'HIDE_ON'
+        layout.operator(
+            "node.toggle_geonode_backdrop",
+            text="Backdrop",
+            icon=icon,
+            depress=_enabled
+        )
+
+
 def register():
     global _draw_handler_node, _draw_handler_view3d
 
@@ -152,6 +169,9 @@ def register():
         # 类已经注册，先注销再重新注册
         bpy.utils.unregister_class(GEONODE_OT_toggle_backdrop)
         bpy.utils.register_class(GEONODE_OT_toggle_backdrop)
+
+    # 在节点编辑器头部添加按钮
+    bpy.types.NODE_HT_header.append(draw_header_button)
 
     # 在 3D 视图中注册捕获回调（POST_PIXEL 确保在绘制完成后执行）
     _draw_handler_view3d = bpy.types.SpaceView3D.draw_handler_add(
@@ -166,6 +186,12 @@ def register():
 
 def unregister():
     global _draw_handler_node, _draw_handler_view3d, _captured_texture
+
+    # 移除头部按钮
+    try:
+        bpy.types.NODE_HT_header.remove(draw_header_button)
+    except:
+        pass
 
     if _draw_handler_view3d:
         bpy.types.SpaceView3D.draw_handler_remove(_draw_handler_view3d, 'WINDOW')
