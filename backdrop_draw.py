@@ -52,15 +52,11 @@ def capture_view3d_framebuffer():
                     _capture_height = height
                     print(f"✓ 创建纹理: {width}x{height}")
 
-                # 更新纹理数据
-                # 使用 bgl 来更新纹理
-                import bgl
-                bgl.glBindTexture(bgl.GL_TEXTURE_2D, _captured_texture.bind_code)
-                bgl.glTexSubImage2D(
-                    bgl.GL_TEXTURE_2D, 0, 0, 0, width, height,
-                    bgl.GL_RGBA, bgl.GL_UNSIGNED_BYTE, buffer
-                )
-                bgl.glBindTexture(bgl.GL_TEXTURE_2D, 0)
+                # 更新纹理数据 - 使用 buffer 对象直接更新
+                # 将 buffer 转换为正确的格式
+                import array
+                pixel_data = buffer.to_list()
+                _captured_texture.clear(format='UBYTE', value=pixel_data)
 
             except Exception as e:
                 print(f"✗ 捕获错误: {e}")
@@ -132,20 +128,18 @@ def draw_backdrop():
         indices=indices,
     )
 
-    # 设置正交投影矩阵
-    projection_matrix = Matrix([
-        [2.0 / width, 0, 0, -1],
-        [0, 2.0 / height, 0, -1],
-        [0, 0, -1, 0],
-        [0, 0, 0, 1]
-    ])
-
     # 绘制
     try:
         gpu.state.blend_set('ALPHA')
         shader.bind()
         shader.uniform_sampler("image", _captured_texture)
-        shader.uniform_float("modelViewProjectionMatrix", projection_matrix)
+
+        # IMAGE 着色器需要 viewProjectionMatrix，不是 modelViewProjectionMatrix
+        # 使用单位矩阵，因为顶点坐标已经是屏幕空间坐标
+        view_matrix = Matrix.Identity(4)
+        projection_matrix = Matrix.OrthoProjection('XY', 4)
+        shader.uniform_float("viewProjectionMatrix", projection_matrix @ view_matrix)
+
         batch.draw(shader)
         gpu.state.blend_set('NONE')
         print("✓ 绘制背景")
