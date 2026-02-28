@@ -13,6 +13,21 @@ _captured_texture = None
 _capture_width = 0
 _capture_height = 0
 _pixel_buffer = None
+_update_timer = None
+
+
+def update_timer_callback():
+    """定时器回调，强制重绘所有区域以实现实时更新"""
+    if not _enabled:
+        return 0.033
+
+    # 强制重绘所有区域
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type in ('VIEW_3D', 'NODE_EDITOR'):
+                area.tag_redraw()
+
+    return 0.033  # 继续定时器
 
 
 def capture_view3d_framebuffer():
@@ -35,14 +50,11 @@ def capture_view3d_framebuffer():
                 return
 
             try:
-                print(f"→ 尝试捕获 3D 视图: {width}x{height}")
-
                 # 读取当前 framebuffer
                 fb = gpu.state.active_framebuffer_get()
 
                 # 读取颜色数据到 buffer - 使用 FLOAT 格式
                 buffer = fb.read_color(0, 0, width, height, 4, 0, 'FLOAT')
-                print(f"  Buffer 大小: {len(buffer)} bytes")
 
                 # 创建或更新纹理
                 if (_captured_texture is None or
@@ -57,23 +69,14 @@ def capture_view3d_framebuffer():
                     _capture_width = width
                     _capture_height = height
                     _pixel_buffer = buffer
-                    print(f"✓ 创建纹理: {width}x{height}")
                 else:
                     # 更新现有纹理 - 重新创建纹理（因为没有直接的更新方法）
                     del _captured_texture
                     _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA32F', data=buffer)
                     _pixel_buffer = buffer
-                    print(f"✓ 更新纹理")
 
             except Exception as e:
                 print(f"✗ 捕获错误: {e}")
-                import traceback
-                traceback.print_exc()
-    else:
-        if context.area:
-            print(f"⚠ 当前区域不是 3D 视图: {context.area.type}")
-        else:
-            print(f"⚠ 没有当前区域")
 
 
 def draw_backdrop():
@@ -120,8 +123,6 @@ def draw_backdrop():
     width = region.width
     height = region.height
 
-    print(f"→ 绘制背景: {width}x{height}, 纹理: {_capture_width}x{_capture_height}")
-
     # 创建着色器 - 使用 IMAGE 着色器
     shader = gpu.shader.from_builtin('IMAGE')
 
@@ -146,11 +147,8 @@ def draw_backdrop():
         shader.uniform_sampler("image", _captured_texture)
         batch.draw(shader)
         gpu.state.blend_set('NONE')
-        print("✓ 绘制完成")
     except Exception as e:
         print(f"✗ 绘制错误: {e}")
-        import traceback
-        traceback.print_exc()
 
 
 class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
@@ -160,18 +158,29 @@ class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        global _enabled
+        global _enabled, _update_timer
         _enabled = not _enabled
 
         if _enabled:
+            # 启动定时器，每 0.033 秒（约 30 FPS）更新一次
+            if _update_timer is None:
+                _update_timer = context.window_manager.event_timer_add(0.033, window=context.window)
+                # 注册定时器回调
+                bpy.app.timers.register(update_timer_callback)
+
             self.report({'INFO'}, "Geometry Nodes Backdrop enabled")
             print("\n=== Backdrop 已启用 ===")
-            print("请确保:")
-            print("1. 3D 视图和几何节点编辑器同时可见")
-            print("2. 在 3D 视图中移动或旋转视图")
-            print("3. 查看控制台输出的调试信息")
+            print("背景将实时更新（约 30 FPS）")
             print("=====================\n")
         else:
+            # 停止定时器
+            if _update_timer is not None:
+                context.window_manager.event_timer_remove(_update_timer)
+                _update_timer = None
+                # 注销定时器回调
+                if bpy.app.timers.is_registered(update_timer_callback):
+                    bpy.app.timers.unregister(update_timer_callback)
+
             self.report({'INFO'}, "Geometry Nodes Backdrop disabled")
             print("\n=== Backdrop 已禁用 ===\n")
 
@@ -235,7 +244,19 @@ def register():
 
 
 def unregister():
-    global _draw_handler_node, _draw_handler_view3d, _captured_texture
+    global _draw_handler_node, _draw_handler_view3d, _captured_texture, _update_timer
+
+    # 停止定时器
+    if _update_timer is not None:
+        try:
+            bpy.context.window_manager.event_timer_remove(_update_timer)
+        except:
+            pass
+        _update_timer = None
+
+    # 注销定时器回调
+    if bpy.app.timers.is_registered(update_timer_callback):
+        bpy.app.timers.unregister(update_timer_callback)
 
     # 移除头部按钮
     try:
