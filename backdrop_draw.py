@@ -54,6 +54,7 @@ def capture_view3d_framebuffer():
                 fb = gpu.state.active_framebuffer_get()
 
                 # 读取颜色数据到 buffer - 使用 FLOAT 格式
+                # 注意：读取的是最终渲染结果，应该包含所有光照和材质
                 buffer = fb.read_color(0, 0, width, height, 4, 0, 'FLOAT')
 
                 # 创建或更新纹理
@@ -69,6 +70,7 @@ def capture_view3d_framebuffer():
                     _capture_width = width
                     _capture_height = height
                     _pixel_buffer = buffer
+                    print(f"✓ 创建纹理: {width}x{height}")
                 else:
                     # 更新现有纹理 - 重新创建纹理（因为没有直接的更新方法）
                     del _captured_texture
@@ -123,13 +125,33 @@ def draw_backdrop():
     width = region.width
     height = region.height
 
+    # 计算纹理的宽高比和节点编辑器的宽高比
+    texture_aspect = _capture_width / _capture_height if _capture_height > 0 else 1.0
+    region_aspect = width / height if height > 0 else 1.0
+
+    # 计算缩放后的尺寸，保持纹理的宽高比
+    if texture_aspect > region_aspect:
+        # 纹理更宽，以宽度为准
+        scaled_width = width
+        scaled_height = width / texture_aspect
+        offset_x = 0
+        offset_y = (height - scaled_height) / 2
+    else:
+        # 纹理更高，以高度为准
+        scaled_height = height
+        scaled_width = height * texture_aspect
+        offset_x = (width - scaled_width) / 2
+        offset_y = 0
+
     # 创建着色器 - 使用 IMAGE 着色器
     shader = gpu.shader.from_builtin('IMAGE')
 
-    # 全屏四边形
+    # 缩放后的四边形，保持宽高比
     vertices = (
-        (0, 0), (width, 0),
-        (width, height), (0, height))
+        (offset_x, offset_y),
+        (offset_x + scaled_width, offset_y),
+        (offset_x + scaled_width, offset_y + scaled_height),
+        (offset_x, offset_y + scaled_height))
 
     texcoords = (
         (0, 0), (1, 0),
