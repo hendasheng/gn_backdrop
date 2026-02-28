@@ -107,45 +107,47 @@ def draw_header_button(self, context):
     layout = self.layout
 
     # 检查是否在节点编辑器中
-    if not hasattr(context, 'area') or context.area.type != 'NODE_EDITOR':
-        return
+    if context.area and context.area.type == 'NODE_EDITOR':
+        space = context.space_data
+        if space and space.type == 'NODE_EDITOR':
+            # 只在几何节点编辑器中显示
+            if hasattr(space, 'tree_type') and space.tree_type == 'GeometryNodeTree':
+                layout.separator_spacer()
 
-    space = context.space_data
-    if space is None:
-        return
-
-    # 只在几何节点编辑器中显示
-    if hasattr(space, 'tree_type') and space.tree_type == 'GeometryNodeTree':
-        layout.separator_spacer()
-
-        # 使用图标按钮，根据状态改变图标
-        icon = 'HIDE_OFF' if _enabled else 'HIDE_ON'
-        layout.operator(
-            "node.toggle_geonode_backdrop",
-            text="Backdrop",
-            icon=icon,
-            depress=_enabled
-        )
+                # 使用图标按钮，根据状态改变图标
+                icon = 'HIDE_OFF' if _enabled else 'HIDE_ON'
+                layout.operator(
+                    "node.toggle_geonode_backdrop",
+                    text="Backdrop",
+                    icon=icon,
+                    depress=_enabled
+                )
 
 
 def register():
     global _draw_handler_node
 
+    print("→ 注册 Backdrop 插件")
+
     # 安全注册类（避免重复注册错误）
     try:
         bpy.utils.register_class(GEONODE_OT_toggle_backdrop)
+        print("✓ 操作符注册成功")
     except ValueError:
         # 类已经注册，先注销再重新注册
         bpy.utils.unregister_class(GEONODE_OT_toggle_backdrop)
         bpy.utils.register_class(GEONODE_OT_toggle_backdrop)
+        print("✓ 操作符重新注册成功")
 
     # 在节点编辑器头部添加按钮
     bpy.types.NODE_HT_header.append(draw_header_button)
+    print("✓ 头部按钮添加成功")
 
     # 在节点编辑器中注册绘制回调
     _draw_handler_node = bpy.types.SpaceNodeEditor.draw_handler_add(
         draw_3d_scene_as_backdrop, (), 'WINDOW', 'PRE_VIEW'
     )
+    print("✓ 绘制回调注册成功")
 
 
 def unregister():
