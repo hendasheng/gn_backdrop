@@ -158,9 +158,9 @@ def register():
         capture_view3d_framebuffer, (), 'WINDOW', 'POST_PIXEL'
     )
 
-    # 在节点编辑器中注册绘制回调
+    # 在节点编辑器中注册绘制回调（使用 WINDOW 区域，PRE_VIEW 阶段确保在背景绘制）
     _draw_handler_node = bpy.types.SpaceNodeEditor.draw_handler_add(
-        draw_backdrop, (), 'BACKDROP', 'POST_PIXEL'
+        draw_backdrop, (), 'WINDOW', 'PRE_VIEW'
     )
 
 
@@ -172,7 +172,7 @@ def unregister():
         _draw_handler_view3d = None
 
     if _draw_handler_node:
-        bpy.types.SpaceNodeEditor.draw_handler_remove(_draw_handler_node, 'BACKDROP')
+        bpy.types.SpaceNodeEditor.draw_handler_remove(_draw_handler_node, 'WINDOW')
         _draw_handler_node = None
 
     if _captured_texture:
