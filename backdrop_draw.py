@@ -2,6 +2,7 @@ import bpy
 import gpu
 from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix
+import numpy as np
 
 
 # 全局变量
@@ -11,11 +12,12 @@ _enabled = False
 _captured_texture = None
 _capture_width = 0
 _capture_height = 0
+_pixel_buffer = None
 
 
 def capture_view3d_framebuffer():
     """在 3D 视图绘制后捕获 framebuffer"""
-    global _captured_texture, _capture_width, _capture_height
+    global _captured_texture, _capture_width, _capture_height, _pixel_buffer
 
     if not _enabled:
         return
@@ -36,7 +38,7 @@ def capture_view3d_framebuffer():
                 # 读取当前 framebuffer
                 fb = gpu.state.active_framebuffer_get()
 
-                # 读取颜色数据
+                # 读取颜色数据到 buffer
                 buffer = fb.read_color(0, 0, width, height, 4, 0, 'UBYTE')
 
                 # 创建或更新纹理
@@ -47,16 +49,17 @@ def capture_view3d_framebuffer():
                     if _captured_texture:
                         del _captured_texture
 
-                    _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA8')
+                    # 创建新纹理，使用 data 参数直接初始化
+                    _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA8', data=buffer)
                     _capture_width = width
                     _capture_height = height
+                    _pixel_buffer = buffer
                     print(f"✓ 创建纹理: {width}x{height}")
-
-                # 更新纹理数据
-                # GPUTexture.clear() 不适合更新像素数据
-                # 我们需要使用不同的方法
-                # 暂时跳过更新，先测试绘制是否工作
-                print(f"✓ 捕获 framebuffer: {width}x{height}")
+                else:
+                    # 更新现有纹理 - 重新创建纹理（因为没有直接的更新方法）
+                    del _captured_texture
+                    _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA8', data=buffer)
+                    _pixel_buffer = buffer
 
             except Exception as e:
                 print(f"✗ 捕获错误: {e}")
@@ -108,28 +111,30 @@ def draw_backdrop():
     width = region.width
     height = region.height
 
-    # 创建着色器 - 使用 UNIFORM_COLOR 先测试基本绘制
-    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+    # 创建着色器 - 使用 IMAGE 着色器
+    shader = gpu.shader.from_builtin('IMAGE')
 
     # 全屏四边形
     vertices = (
         (0, 0), (width, 0),
         (width, height), (0, height))
 
+    texcoords = (
+        (0, 0), (1, 0),
+        (1, 1), (0, 1))
+
     batch = batch_for_shader(
         shader, 'TRI_FAN',
-        {"pos": vertices},
+        {"pos": vertices, "texCoord": texcoords},
     )
 
     # 绘制
     try:
         gpu.state.blend_set('ALPHA')
         shader.bind()
-        # 绘制半透明蓝色矩形作为测试
-        shader.uniform_float("color", (0.2, 0.5, 1.0, 0.3))
+        shader.uniform_sampler("image", _captured_texture)
         batch.draw(shader)
         gpu.state.blend_set('NONE')
-        print("✓ 绘制测试背景（蓝色）")
     except Exception as e:
         print(f"✗ 绘制错误: {e}")
         import traceback
