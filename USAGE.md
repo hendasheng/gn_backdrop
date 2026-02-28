@@ -2,32 +2,28 @@
 
 ## 快速开始
 
-### 1. 安装插件
+### 1. 打包插件（如果从源码安装）
 
-将 `gn_backdrop` 文件夹复制到 Blender 插件目录：
+在项目的父目录执行：
 
-**macOS:**
+**macOS/Linux:**
 ```bash
-cp -r gn_backdrop ~/Library/Application\ Support/Blender/4.5/scripts/addons/
+zip -r gn_backdrop.zip gn_backdrop -x "*.git*" -x "*__pycache__*" -x "*.DS_Store"
 ```
 
-**Windows:**
-```
-复制 gn_backdrop 文件夹到：
-%APPDATA%\Blender Foundation\Blender\4.5\scripts\addons\
-```
-
-**Linux:**
-```bash
-cp -r gn_backdrop ~/.config/blender/4.5/scripts/addons/
+**Windows (PowerShell):**
+```powershell
+Compress-Archive -Path gn_backdrop -DestinationPath gn_backdrop.zip
 ```
 
-### 2. 启用插件
+### 2. 安装插件
 
 1. 打开 Blender
 2. 编辑 > 偏好设置 > 插件
-3. 搜索 "Geometry Nodes Backdrop"
-4. 勾选启用
+3. 点击右上角的 `安装...` 按钮
+4. 选择 `gn_backdrop.zip` 文件
+5. 搜索 "Geometry Nodes Backdrop"
+6. 勾选启用插件
 
 ### 3. 使用
 
