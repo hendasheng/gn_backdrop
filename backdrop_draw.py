@@ -39,6 +39,8 @@ def capture_view3d_framebuffer():
 
     context = bpy.context
 
+    print(f"→ 捕获回调被调用")  # 确认回调被调用
+
     # 只在 3D 视图中捕获
     if context.area and context.area.type == 'VIEW_3D':
         region = context.region
@@ -46,31 +48,26 @@ def capture_view3d_framebuffer():
             width = region.width
             height = region.height
 
+            print(f"→ 在 3D 视图中: {width}x{height}")
+
             if width <= 0 or height <= 0:
+                print(f"⚠ 尺寸无效")
                 return
 
             try:
                 # 读取当前 framebuffer
                 fb = gpu.state.active_framebuffer_get()
+                print(f"→ Framebuffer: {fb}")
 
                 # 读取颜色数据到 buffer - 使用 FLOAT 格式
-                # 注意：读取的是最终渲染结果，应该包含所有光照和材质
                 buffer = fb.read_color(0, 0, width, height, 4, 0, 'FLOAT')
+                print(f"→ Buffer 大小: {len(buffer)} bytes")
 
-                # 调试：检查 buffer 的内容
-                if _captured_texture is None:
-                    # 只在第一次打印
-                    # 检查中心像素的值
-                    center_idx = (height // 2 * width + width // 2) * 4
-                    if center_idx + 4 <= len(buffer):
-                        center_pixel = buffer[center_idx:center_idx+4]
-                        print(f"✓ 创建纹理: {width}x{height}")
-                        print(f"  中心像素 RGBA: {list(center_pixel)}")
-                        print(f"  Framebuffer: {fb}")
-
-                        # 检查是否所有值都接近 0（说明捕获的是空白或错误的数据）
-                        if all(abs(v) < 0.01 for v in center_pixel[:3]):
-                            print(f"  ⚠ 警告：捕获的像素值接近 0，可能没有捕获到正确的渲染内容")
+                # 检查中心像素的值
+                center_idx = (height // 2 * width + width // 2) * 4
+                if center_idx + 4 <= len(buffer):
+                    center_pixel = buffer[center_idx:center_idx+4]
+                    print(f"→ 中心像素 RGBA: [{center_pixel[0]:.3f}, {center_pixel[1]:.3f}, {center_pixel[2]:.3f}, {center_pixel[3]:.3f}]")
 
                 # 创建或更新纹理
                 if (_captured_texture is None or
@@ -80,19 +77,27 @@ def capture_view3d_framebuffer():
                     if _captured_texture:
                         del _captured_texture
 
-                    # 创建新纹理，使用 data 参数直接初始化
+                    # 创建新纹理
                     _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA32F', data=buffer)
                     _capture_width = width
                     _capture_height = height
                     _pixel_buffer = buffer
+                    print(f"✓ 创建纹理成功")
                 else:
-                    # 更新现有纹理 - 重新创建纹理（因为没有直接的更新方法）
+                    # 更新纹理
                     del _captured_texture
                     _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA32F', data=buffer)
                     _pixel_buffer = buffer
 
             except Exception as e:
                 print(f"✗ 捕获错误: {e}")
+                import traceback
+                traceback.print_exc()
+    else:
+        if context.area:
+            print(f"⚠ 当前区域不是 3D 视图: {context.area.type}")
+        else:
+            print(f"⚠ 没有当前区域")
 
 
 def draw_backdrop():
