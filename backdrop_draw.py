@@ -35,11 +35,15 @@ def capture_view3d_framebuffer():
                 return
 
             try:
+                print(f"→ 尝试捕获 3D 视图: {width}x{height}")
+
                 # 读取当前 framebuffer
                 fb = gpu.state.active_framebuffer_get()
+                print(f"  Framebuffer: {fb}")
 
                 # 读取颜色数据到 buffer
                 buffer = fb.read_color(0, 0, width, height, 4, 0, 'UBYTE')
+                print(f"  Buffer 大小: {len(buffer)} bytes")
 
                 # 创建或更新纹理
                 if (_captured_texture is None or
@@ -60,11 +64,17 @@ def capture_view3d_framebuffer():
                     del _captured_texture
                     _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA8', data=buffer)
                     _pixel_buffer = buffer
+                    print(f"✓ 更新纹理")
 
             except Exception as e:
                 print(f"✗ 捕获错误: {e}")
                 import traceback
                 traceback.print_exc()
+    else:
+        if context.area:
+            print(f"⚠ 当前区域不是 3D 视图: {context.area.type}")
+        else:
+            print(f"⚠ 没有当前区域")
 
 
 def draw_backdrop():
@@ -91,7 +101,7 @@ def draw_backdrop():
                     shader.bind()
                     shader.uniform_float("color", (1, 0, 0, 0.5))
                     batch.draw(shader)
-                    print("⚠ 纹理未捕获，显示测试矩形")
+                    print("⚠ 纹理未捕获，显示红色测试矩形")
         return
 
     context = bpy.context
@@ -110,6 +120,8 @@ def draw_backdrop():
 
     width = region.width
     height = region.height
+
+    print(f"→ 绘制背景: {width}x{height}, 纹理: {_capture_width}x{_capture_height}")
 
     # 创建着色器 - 使用 IMAGE 着色器
     shader = gpu.shader.from_builtin('IMAGE')
@@ -135,6 +147,7 @@ def draw_backdrop():
         shader.uniform_sampler("image", _captured_texture)
         batch.draw(shader)
         gpu.state.blend_set('NONE')
+        print("✓ 绘制完成")
     except Exception as e:
         print(f"✗ 绘制错误: {e}")
         import traceback
