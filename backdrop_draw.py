@@ -60,11 +60,17 @@ def capture_view3d_framebuffer():
                 # 调试：检查 buffer 的内容
                 if _captured_texture is None:
                     # 只在第一次打印
-                    import array
-                    sample = buffer[:16]  # 前 4 个像素
-                    print(f"✓ 创建纹理: {width}x{height}")
-                    print(f"  Buffer 样本 (前4个像素的RGBA): {list(sample)}")
-                    print(f"  Framebuffer: {fb}")
+                    # 检查中心像素的值
+                    center_idx = (height // 2 * width + width // 2) * 4
+                    if center_idx + 4 <= len(buffer):
+                        center_pixel = buffer[center_idx:center_idx+4]
+                        print(f"✓ 创建纹理: {width}x{height}")
+                        print(f"  中心像素 RGBA: {list(center_pixel)}")
+                        print(f"  Framebuffer: {fb}")
+
+                        # 检查是否所有值都接近 0（说明捕获的是空白或错误的数据）
+                        if all(abs(v) < 0.01 for v in center_pixel[:3]):
+                            print(f"  ⚠ 警告：捕获的像素值接近 0，可能没有捕获到正确的渲染内容")
 
                 # 创建或更新纹理
                 if (_captured_texture is None or
@@ -133,13 +139,33 @@ def draw_backdrop():
     width = region.width
     height = region.height
 
+    # 计算纹理和窗口的宽高比
+    texture_aspect = _capture_width / _capture_height if _capture_height > 0 else 1.0
+    region_aspect = width / height if height > 0 else 1.0
+
+    # 计算缩放后的尺寸，保持纹理的宽高比
+    if texture_aspect > region_aspect:
+        # 纹理更宽，以宽度为准
+        scaled_width = width
+        scaled_height = width / texture_aspect
+        offset_x = 0
+        offset_y = (height - scaled_height) / 2
+    else:
+        # 纹理更高，以高度为准
+        scaled_height = height
+        scaled_width = height * texture_aspect
+        offset_x = (width - scaled_width) / 2
+        offset_y = 0
+
     # 创建着色器 - 使用 IMAGE 着色器
     shader = gpu.shader.from_builtin('IMAGE')
 
-    # 全屏四边形
+    # 保持宽高比的四边形
     vertices = (
-        (0, 0), (width, 0),
-        (width, height), (0, height))
+        (offset_x, offset_y),
+        (offset_x + scaled_width, offset_y),
+        (offset_x + scaled_width, offset_y + scaled_height),
+        (offset_x, offset_y + scaled_height))
 
     # 正常的纹理坐标
     texcoords = (
