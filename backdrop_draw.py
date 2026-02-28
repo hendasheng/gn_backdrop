@@ -144,9 +144,18 @@ class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
 
 def draw_header_button(self, context):
     """在节点编辑器头部绘制 Backdrop 按钮"""
+    layout = self.layout
+
+    # 检查是否在节点编辑器中
+    if context.area.type != 'NODE_EDITOR':
+        return
+
+    space = context.space_data
+    if space is None:
+        return
+
     # 只在几何节点编辑器中显示
-    if context.space_data.tree_type == 'GeometryNodeTree':
-        layout = self.layout
+    if hasattr(space, 'tree_type') and space.tree_type == 'GeometryNodeTree':
         layout.separator_spacer()
 
         # 使用图标按钮，根据状态改变图标
