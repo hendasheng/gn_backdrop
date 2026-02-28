@@ -141,9 +141,10 @@ def draw_backdrop():
         (0, 0), (width, 0),
         (width, height), (0, height))
 
+    # 翻转 Y 轴的纹理坐标（OpenGL 和 Blender 的坐标系可能不同）
     texcoords = (
-        (0, 0), (1, 0),
-        (1, 1), (0, 1))
+        (0, 1), (1, 1),
+        (1, 0), (0, 0))
 
     batch = batch_for_shader(
         shader, 'TRI_FAN',
@@ -242,9 +243,10 @@ def register():
     # 在节点编辑器头部添加按钮
     bpy.types.NODE_HT_header.append(draw_header_button)
 
-    # 在 3D 视图中注册捕获回调（POST_PIXEL 确保在绘制完成后执行）
+    # 在 3D 视图中注册捕获回调
+    # 使用 POST_VIEW 而不是 POST_PIXEL，确保在所有渲染完成后捕获
     _draw_handler_view3d = bpy.types.SpaceView3D.draw_handler_add(
-        capture_view3d_framebuffer, (), 'WINDOW', 'POST_PIXEL'
+        capture_view3d_framebuffer, (), 'WINDOW', 'POST_VIEW'
     )
 
     # 在节点编辑器中注册绘制回调（使用 WINDOW 区域，PRE_VIEW 阶段确保在背景绘制）
