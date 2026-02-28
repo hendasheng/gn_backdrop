@@ -2,17 +2,12 @@ import bpy
 import gpu
 from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix
-import numpy as np
+import bgl
 
 
 # 全局变量
 _draw_handler_node = None
-_draw_handler_view3d = None
 _enabled = False
-_captured_texture = None
-_capture_width = 0
-_capture_height = 0
-_pixel_buffer = None
 _update_timer = None
 
 
@@ -30,96 +25,94 @@ def update_timer_callback():
     return 0.033  # 继续定时器
 
 
-def capture_view3d_framebuffer():
-    """在 3D 视图绘制后捕获 framebuffer"""
-    global _captured_texture, _capture_width, _capture_height, _pixel_buffer
+def get_view3d_matrices():
+    """获取 3D 视图的视图和投影矩阵"""
+    for area in bpy.context.screen.areas:
+        if area.type == 'VIEW_3D':
+            for space in area.spaces:
+                if space.type == 'VIEW_3D':
+                    for region in area.regions:
+                        if region.type == 'WINDOW':
+                            # 获取 3D 视图的视图矩阵和投影矩阵
+                            view_matrix = space.region_3d.view_matrix.copy()
+                            projection_matrix = space.region_3d.window_matrix.copy()
+                            return view_matrix, projection_matrix, space.region_3d
+    return None, None, None
 
-    if not _enabled:
-        return
 
-    context = bpy.context
+def draw_scene_objects(view_matrix, projection_matrix):
+    """绘制场景中的所有对象"""
+    # 启用深度测试
+    gpu.state.depth_test_set('LESS_EQUAL')
+    gpu.state.depth_mask_set(True)
 
-    # 只在 3D 视图中捕获
-    if context.area and context.area.type == 'VIEW_3D':
-        region = context.region
-        if region and region.type == 'WINDOW':
-            width = region.width
-            height = region.height
+    # 使用内置的 3D 着色器
+    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
 
-            if width <= 0 or height <= 0:
-                return
+    # 遍历场景中的所有对象
+    for obj in bpy.context.scene.objects:
+        if obj.type == 'MESH' and obj.visible_get():
+            # 获取对象的世界矩阵
+            model_matrix = obj.matrix_world
 
-            try:
-                # 读取当前 framebuffer
-                fb = gpu.state.active_framebuffer_get()
+            # 计算 MVP 矩阵
+            mvp_matrix = projection_matrix @ view_matrix @ model_matrix
 
-                # 读取颜色数据到 buffer - 使用 FLOAT 格式
-                # 注意：读取的是最终渲染结果，应该包含所有光照和材质
-                buffer = fb.read_color(0, 0, width, height, 4, 0, 'FLOAT')
+            # 获取网格数据
+            mesh = obj.data
+            if len(mesh.vertices) == 0:
+                continue
 
-                # 调试：检查 buffer 的内容
-                if _captured_texture is None:
-                    # 只在第一次打印
-                    # 检查中心像素的值
-                    center_idx = (height // 2 * width + width // 2) * 4
-                    if center_idx + 4 <= len(buffer):
-                        center_pixel = buffer[center_idx:center_idx+4]
-                        print(f"✓ 创建纹理: {width}x{height}")
-                        print(f"  中心像素 RGBA: {list(center_pixel)}")
-                        print(f"  Framebuffer: {fb}")
+            # 创建顶点位置列表
+            vertices = [(v.co.x, v.co.y, v.co.z) for v in mesh.vertices]
 
-                        # 检查是否所有值都接近 0（说明捕获的是空白或错误的数据）
-                        if all(abs(v) < 0.01 for v in center_pixel[:3]):
-                            print(f"  ⚠ 警告：捕获的像素值接近 0，可能没有捕获到正确的渲染内容")
+            # 创建索引列表（三角形）
+            indices = []
+            for poly in mesh.polygons:
+                if len(poly.vertices) >= 3:
+                    # 简单的三角形扇形分割
+                    for i in range(1, len(poly.vertices) - 1):
+                        indices.append((poly.vertices[0], poly.vertices[i], poly.vertices[i + 1]))
 
-                # 创建或更新纹理
-                if (_captured_texture is None or
-                    _capture_width != width or
-                    _capture_height != height):
+            if not indices:
+                continue
 
-                    if _captured_texture:
-                        del _captured_texture
+            # 创建批次
+            batch = batch_for_shader(
+                shader, 'TRIS',
+                {"pos": vertices},
+                indices=indices,
+            )
 
-                    # 创建新纹理，使用 data 参数直接初始化
-                    _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA32F', data=buffer)
-                    _capture_width = width
-                    _capture_height = height
-                    _pixel_buffer = buffer
-                else:
-                    # 更新现有纹理 - 重新创建纹理（因为没有直接的更新方法）
-                    del _captured_texture
-                    _captured_texture = gpu.types.GPUTexture((width, height), format='RGBA32F', data=buffer)
-                    _pixel_buffer = buffer
+            # 设置着色器
+            shader.bind()
 
-            except Exception as e:
-                print(f"✗ 捕获错误: {e}")
+            # 使用对象的材质颜色，如果没有则使用默认颜色
+            if obj.active_material and obj.active_material.diffuse_color:
+                color = obj.active_material.diffuse_color
+                shader.uniform_float("color", (color[0], color[1], color[2], 1.0))
+            else:
+                shader.uniform_float("color", (0.8, 0.8, 0.8, 1.0))
+
+            # 设置 MVP 矩阵
+            gpu.matrix.push()
+            gpu.matrix.load_matrix(mvp_matrix)
+
+            # 绘制
+            batch.draw(shader)
+
+            gpu.matrix.pop()
+
+    # 禁用深度测试
+    gpu.state.depth_test_set('NONE')
+    gpu.state.depth_mask_set(False)
 
 
 def draw_backdrop():
-    """在几何节点编辑器背景绘制捕获的内容"""
-    global _enabled, _captured_texture
+    """在几何节点编辑器背景绘制 3D 场景"""
+    global _enabled
 
     if not _enabled:
-        return
-
-    if _captured_texture is None:
-        # 绘制一个测试矩形来验证绘制是否工作
-        context = bpy.context
-        if hasattr(context, 'space_data') and context.space_data.type == 'NODE_EDITOR':
-            space = context.space_data
-            if hasattr(space, 'tree_type') and space.tree_type == 'GeometryNodeTree':
-                region = context.region
-                if region:
-                    # 绘制红色测试矩形
-                    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
-                    batch = batch_for_shader(
-                        shader, 'TRI_FAN',
-                        {"pos": [(100, 100), (300, 100), (300, 300), (100, 300)]},
-                    )
-                    shader.bind()
-                    shader.uniform_float("color", (1, 0, 0, 0.5))
-                    batch.draw(shader)
-                    print("⚠ 纹理未捕获，显示红色测试矩形")
         return
 
     context = bpy.context
@@ -136,76 +129,33 @@ def draw_backdrop():
     if not region:
         return
 
-    width = region.width
-    height = region.height
+    # 获取 3D 视图的矩阵
+    view_matrix, projection_matrix, region_3d = get_view3d_matrices()
 
-    # 计算纹理和窗口的宽高比
-    texture_aspect = _capture_width / _capture_height if _capture_height > 0 else 1.0
-    region_aspect = width / height if height > 0 else 1.0
+    if view_matrix is None or projection_matrix is None:
+        # 如果找不到 3D 视图，显示提示信息
+        return
 
-    # 计算缩放后的尺寸，保持纹理的宽高比
-    if texture_aspect > region_aspect:
-        # 纹理更宽，以宽度为准
-        scaled_width = width
-        scaled_height = width / texture_aspect
-        offset_x = 0
-        offset_y = (height - scaled_height) / 2
-    else:
-        # 纹理更高，以高度为准
-        scaled_height = height
-        scaled_width = height * texture_aspect
-        offset_x = (width - scaled_width) / 2
-        offset_y = 0
-
-    # 创建着色器 - 使用 IMAGE 着色器
-    shader = gpu.shader.from_builtin('IMAGE')
-
-    # 保持宽高比的四边形
-    vertices = (
-        (offset_x, offset_y),
-        (offset_x + scaled_width, offset_y),
-        (offset_x + scaled_width, offset_y + scaled_height),
-        (offset_x, offset_y + scaled_height))
-
-    # 正常的纹理坐标
-    texcoords = (
-        (0, 0), (1, 0),
-        (1, 1), (0, 1))
-
-    batch = batch_for_shader(
-        shader, 'TRI_FAN',
-        {"pos": vertices, "texCoord": texcoords},
-    )
-
-    # 绘制
     try:
-        # 保存并重置变换矩阵，使用屏幕空间坐标
+        # 保存当前的矩阵状态
         gpu.matrix.push()
         gpu.matrix.push_projection()
 
-        # 加载单位矩阵
-        gpu.matrix.load_identity()
+        # 加载 3D 视图的矩阵
+        gpu.matrix.load_matrix(Matrix.Identity(4))
+        gpu.matrix.load_projection_matrix(Matrix.Identity(4))
 
-        # 设置正交投影矩阵，映射到屏幕像素坐标
-        projection_matrix = Matrix([
-            [2.0 / width, 0, 0, -1],
-            [0, 2.0 / height, 0, -1],
-            [0, 0, -1, 0],
-            [0, 0, 0, 1]
-        ])
-        gpu.matrix.load_projection_matrix(projection_matrix)
+        # 绘制场景对象
+        draw_scene_objects(view_matrix, projection_matrix)
 
-        gpu.state.blend_set('ALPHA')
-        shader.bind()
-        shader.uniform_sampler("image", _captured_texture)
-        batch.draw(shader)
-        gpu.state.blend_set('NONE')
-
-        # 恢复变换矩阵
+        # 恢复矩阵状态
         gpu.matrix.pop_projection()
         gpu.matrix.pop()
+
     except Exception as e:
         print(f"✗ 绘制错误: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
@@ -227,7 +177,7 @@ class GEONODE_OT_toggle_backdrop(bpy.types.Operator):
 
             self.report({'INFO'}, "Geometry Nodes Backdrop enabled")
             print("\n=== Backdrop 已启用 ===")
-            print("背景将实时更新（约 30 FPS）")
+            print("背景将实时显示 3D 场景（约 30 FPS）")
             print("=====================\n")
         else:
             # 停止定时器
@@ -276,7 +226,7 @@ def draw_header_button(self, context):
 
 
 def register():
-    global _draw_handler_node, _draw_handler_view3d
+    global _draw_handler_node
 
     # 安全注册类（避免重复注册错误）
     try:
@@ -289,12 +239,6 @@ def register():
     # 在节点编辑器头部添加按钮
     bpy.types.NODE_HT_header.append(draw_header_button)
 
-    # 在 3D 视图中注册捕获回调
-    # 使用 POST_VIEW 而不是 POST_PIXEL，确保在所有渲染完成后捕获
-    _draw_handler_view3d = bpy.types.SpaceView3D.draw_handler_add(
-        capture_view3d_framebuffer, (), 'WINDOW', 'POST_VIEW'
-    )
-
     # 在节点编辑器中注册绘制回调（使用 WINDOW 区域，PRE_VIEW 阶段确保在背景绘制）
     _draw_handler_node = bpy.types.SpaceNodeEditor.draw_handler_add(
         draw_backdrop, (), 'WINDOW', 'PRE_VIEW'
@@ -302,7 +246,7 @@ def register():
 
 
 def unregister():
-    global _draw_handler_node, _draw_handler_view3d, _captured_texture, _update_timer
+    global _draw_handler_node, _update_timer
 
     # 停止定时器
     if _update_timer is not None:
@@ -322,17 +266,9 @@ def unregister():
     except:
         pass
 
-    if _draw_handler_view3d:
-        bpy.types.SpaceView3D.draw_handler_remove(_draw_handler_view3d, 'WINDOW')
-        _draw_handler_view3d = None
-
     if _draw_handler_node:
         bpy.types.SpaceNodeEditor.draw_handler_remove(_draw_handler_node, 'WINDOW')
         _draw_handler_node = None
-
-    if _captured_texture:
-        del _captured_texture
-        _captured_texture = None
 
     try:
         bpy.utils.unregister_class(GEONODE_OT_toggle_backdrop)
