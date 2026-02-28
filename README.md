@@ -16,20 +16,20 @@
 
 **macOS/Linux:**
 ```bash
-cd gn_backdrop
 ./package.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-cd gn_backdrop
 .\package.ps1
 ```
 
-2. 在 Blender 中：
+2. 脚本会自动读取 `__init__.py` 中的版本号，并在**项目父目录**下生成 `gn_backdrop_vX.X.X.zip` 文件。
+
+3. 在 Blender 中：
    - 编辑 > 偏好设置 > 插件
    - 点击右上角的 `安装...` 按钮
-   - 选择生成的 `gn_backdrop.zip` 文件（在项目父目录）
+   - 选择生成的 zip 文件
    - 搜索 "Geometry Nodes Backdrop"
    - 勾选启用插件
 
